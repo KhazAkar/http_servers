@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 )
 
@@ -12,12 +11,9 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func redirectHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Redirecting to /app/")
-	fmt.Println(r.URL.Path)
-	fmt.Println("Location Header:", w.Header().Get("Location"))
 	http.Redirect(w, r, "/app/", http.StatusMovedPermanently)
-	fmt.Println("Location Header After Redirect:", w.Header().Get("Location"))
 }
+
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/app", redirectHandler)
