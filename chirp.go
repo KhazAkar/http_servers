@@ -2,64 +2,66 @@ package main
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
+	"slices"
+	"strings"
 )
 
+type parameters struct {
+	Body string `json:"body"`
+}
+
+type returnVals struct {
+	CleanedBody string `json:"cleaned_body"`
+}
+
+type errorJson struct {
+	Error string `json:"error"`
+}
+
 func handlerChirp(w http.ResponseWriter, r *http.Request) {
-	type parameters struct {
-		// these tags indicate how the keys in the JSON should be mapped to the struct fields
-		// the struct fields must be exported (start with a capital letter) if you want them parsed
-		Body string `json:"body"`
-	}
-	type returnVals struct {
-		// the key will be the name of struct field unless you give it an explicit JSON tag
-		Valid bool `json:"valid"`
-	}
-	type errorJson struct {
-		Error string `json:"error"`
-	}
+
 	decoder := json.NewDecoder(r.Body)
 	params := parameters{}
 	err := decoder.Decode(&params)
 	if err != nil {
-		// an error will be thrown if the JSON is invalid or has the wrong types
-		// any missing fields will simply have their values in the struct set to their zero value
-		errorResp := errorJson{
-			Error: "Something went wrong",
-		}
-		dat, err := json.Marshal(errorResp)
-		if err != nil {
-			log.Printf("Error marshalling JSON: %s", err)
-			w.WriteHeader(500)
-			w.Write(dat)
-			return
-		}
+		respondWithError(w, http.StatusBadRequest, "Invalid request payload")
+		return
 	}
+
+	if len(params.Body) > 140 {
+		respondWithError(w, http.StatusBadRequest, "Chirp is too long")
+		return
+	}
+
+	cleanedBody := replaceProfaneWords(params.Body)
 	respBody := returnVals{
-		Valid: true,
+		CleanedBody: cleanedBody,
 	}
-	if len(params.Body) > 41 {
-		respBody.Valid = false
-		w.WriteHeader(400)
-		errorJson := errorJson{
-			Error: "Chirp is too long",
+
+	respondWithJSON(w, http.StatusOK, respBody)
+}
+
+func replaceProfaneWords(text string) string {
+	profaneWords := []string{"kerfuffle", "sharbert", "fornax"}
+	words := strings.Split(text, " ")
+	for i, word := range words {
+		lowerWord := strings.ToLower(word)
+		if slices.Contains(profaneWords, lowerWord) {
+			words[i] = "****"
 		}
-		dat, err := json.Marshal(errorJson)
-		if err != nil {
-			w.WriteHeader(500)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(dat)
-		return
 	}
-	dat, err := json.Marshal(respBody)
-	if err != nil {
-		w.WriteHeader(500)
-		return
-	}
+	return strings.Join(words, " ")
+}
+
+func respondWithError(w http.ResponseWriter, code int, msg string) {
+	respondWithJSON(w, code, errorJson{Error: msg})
+}
+
+func respondWithJSON(w http.ResponseWriter, code int, payload any) {
+	response, _ := json.Marshal(payload)
+
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	w.Write(dat)
+	w.WriteHeader(code)
+	w.Write(response)
 }
