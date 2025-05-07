@@ -1,25 +1,52 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"sync/atomic"
+	"time"
+
+	"github.com/KhazAkar/http_server/internal/database"
+	"github.com/google/uuid"
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 )
+
+type User struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Email     string    `json:"email"`
+}
 
 type apiConfig struct {
 	fileserverHits atomic.Int32
+	dbQueries      *database.Queries
+	platformTarget string
 }
 
 func redirectHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/app/", http.StatusMovedPermanently)
 }
 func main() {
+	godotenv.Load(".env")
+	dbURL := os.Getenv("DB_URL")
+	platformTarget := os.Getenv("PLATFORM")
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
 	const filepathRoot = "./pages"
 	const port = "8080"
 
 	apiCfg := apiConfig{
 		fileserverHits: atomic.Int32{},
+		dbQueries:      database.New(db),
+		platformTarget: platformTarget,
 	}
 
 	mux := http.NewServeMux()
@@ -31,6 +58,7 @@ func main() {
 	mux.HandleFunc("GET /admin/metrics", apiCfg.handlerMetrics)
 	mux.HandleFunc("POST /admin/reset", apiCfg.handlerReset)
 	mux.HandleFunc("POST /api/validate_chirp", handlerChirp)
+	mux.HandleFunc("POST /api/users", apiCfg.handlerCreateUser)
 
 	srv := &http.Server{
 		Addr:    ":" + port,

@@ -20,7 +20,6 @@ type errorJson struct {
 }
 
 func handlerChirp(w http.ResponseWriter, r *http.Request) {
-
 	decoder := json.NewDecoder(r.Body)
 	params := parameters{}
 	err := decoder.Decode(&params)
