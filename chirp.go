@@ -5,21 +5,30 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
+
+	"github.com/KhazAkar/http_server/internal/database"
+	"github.com/google/uuid"
 )
 
 type parameters struct {
-	Body string `json:"body"`
+	Body   string `json:"body"`
+	UserID string `json:"user_id"`
 }
 
 type returnVals struct {
-	CleanedBody string `json:"cleaned_body"`
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Body      string    `json:"body"`
+	UserID    uuid.UUID `json:"user_id"`
 }
 
 type errorJson struct {
 	Error string `json:"error"`
 }
 
-func handlerChirp(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) handlerChirp(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	params := parameters{}
 	err := decoder.Decode(&params)
@@ -34,13 +43,30 @@ func handlerChirp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cleanedBody := replaceProfaneWords(params.Body)
-	respBody := returnVals{
-		CleanedBody: cleanedBody,
+	userID, err := uuid.Parse(params.UserID)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid user ID")
+		return
+	}
+	chirp, err := cfg.dbQueries.CreateChirp(r.Context(), database.CreateChirpParams{
+		Body:   cleanedBody,
+		UserID: userID,
+	})
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Could not create chirp")
+		return
 	}
 
-	respondWithJSON(w, http.StatusOK, respBody)
-}
+	respBody := returnVals{
+		ID:        chirp.ID,
+		CreatedAt: chirp.CreatedAt,
+		UpdatedAt: chirp.UpdatedAt,
+		Body:      chirp.Body,
+		UserID:    chirp.UserID,
+	}
 
+	respondWithJSON(w, http.StatusCreated, respBody)
+}
 func replaceProfaneWords(text string) string {
 	profaneWords := []string{"kerfuffle", "sharbert", "fornax"}
 	words := strings.Split(text, " ")
