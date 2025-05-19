@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"slices"
 	"strings"
@@ -67,6 +68,52 @@ func (cfg *apiConfig) handlerChirp(w http.ResponseWriter, r *http.Request) {
 
 	respondWithJSON(w, http.StatusCreated, respBody)
 }
+
+func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
+	chirps, err := cfg.dbQueries.GetAllChirps(r.Context())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Could not get chirps from DB")
+		return
+	}
+	var chirpList []returnVals
+	for _, chirp := range chirps {
+		chirpList = append(chirpList, returnVals{
+			ID:        chirp.ID,
+			CreatedAt: chirp.CreatedAt,
+			UpdatedAt: chirp.UpdatedAt,
+			Body:      chirp.Body,
+			UserID:    chirp.UserID,
+		})
+	}
+	respondWithJSON(w, http.StatusOK, chirpList)
+}
+
+func (cfg *apiConfig) handlerGetOneChirp(w http.ResponseWriter, r *http.Request) {
+	chirpIDStr := r.PathValue("chirpID")
+	chirpIDuuid, err := uuid.Parse(chirpIDStr)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "No user ID found in DB")
+		return
+	}
+
+	chirp, err := cfg.dbQueries.GetOneChirp(r.Context(), chirpIDuuid)
+	if err != nil {
+		log.Printf("Error getting chirp from DB: %v", err)
+		respondWithError(w, http.StatusInternalServerError, "Could not get chirp from DB")
+		return
+	}
+
+	respBody := returnVals{
+		ID:        chirp.ID,
+		CreatedAt: chirp.CreatedAt,
+		UpdatedAt: chirp.UpdatedAt,
+		Body:      chirp.Body,
+		UserID:    chirp.UserID,
+	}
+
+	respondWithJSON(w, http.StatusOK, respBody)
+}
+
 func replaceProfaneWords(text string) string {
 	profaneWords := []string{"kerfuffle", "sharbert", "fornax"}
 	words := strings.Split(text, " ")
